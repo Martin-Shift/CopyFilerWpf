@@ -80,7 +80,7 @@ namespace FilerWpf
             Parallel.For(0, copyOperations.Count, new ParallelOptions { MaxDegreeOfParallelism = numThreads }, i =>
             {
                 // Call CopyDirectory with the progress indicator and reset event for the current thread
-                CopyDirectory(copyOperations[i].source, copyOperations[i].destination, Progresses[AllThreads-numThreads+i].Progress, Progresses[AllThreads - numThreads + i].resetEvent, AllThreads - numThreads + i);
+                CopyDirectory(copyOperations[i].source, copyOperations[i].destination, Progresses[AllThreads - numThreads + i].Progress, Progresses[AllThreads - numThreads + i].resetEvent, AllThreads - numThreads + i);
                 AllThreads--;
             });
         }
@@ -105,8 +105,11 @@ namespace FilerWpf
                 // Copy the file to the destination directory
                 string relativePath = file.Substring(sourceDirectory.Length + 1);
                 string destinationFile = Path.Combine(destinationDirectory, relativePath);
-                Directory.CreateDirectory(Path.GetDirectoryName(destinationFile));
-                File.Copy(file, destinationFile);
+                if (!Directory.Exists(destinationFile))
+                {
+                    Directory.CreateDirectory(Path.GetDirectoryName(destinationFile));
+                }
+                File.Copy(file, destinationFile, true);
 
                 // Increment the files copied counter using Interlocked
                 Interlocked.Increment(ref filesCopied);
@@ -133,7 +136,7 @@ namespace FilerWpf
         {
             FolderBrowserDialog folderBrowserDialog = new FolderBrowserDialog();
             folderBrowserDialog.Title = "Select Directories";
-            folderBrowserDialog.InitialFolder = @"D:\TestCopy";
+            folderBrowserDialog.InitialFolder = @"C:\";
             folderBrowserDialog.AllowMultiSelect = true;
             if (folderBrowserDialog.ShowDialog() == System.Windows.Forms.DialogResult.OK)
             {
@@ -182,7 +185,6 @@ namespace FilerWpf
         });
         public ICommand CalcelAll => new RelayCommand(x =>
         {
-            Progresses.ForEach(x => x.PauseThread());
             Thread.Sleep(1000);
             Progresses.ForEach(x => x.State = CopyState.Canceled);
 

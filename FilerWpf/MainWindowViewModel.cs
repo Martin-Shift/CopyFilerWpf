@@ -12,6 +12,9 @@ using FolderBrowserEx;
 using System.Drawing;
 using static System.Windows.Forms.AxHost;
 using System.Windows.Media;
+using System.Windows;
+using System.Windows.Shapes;
+using Path = System.IO.Path;
 
 namespace FilerWpf
 {
@@ -36,7 +39,8 @@ namespace FilerWpf
         public ObservableCollection<FileProgressBar> ProgressViews { get => new(Progresses); }
         public List<FileProgressBar> Progresses { get; set; }
         //General bar
-        public double ProgressesAvg { get => Progresses.Average(x => x.ProgressValue); }
+        public string Progressstr { get => TotalFileCount == 0 ? "" : $"{CopiedFileCount} / {TotalFileCount} Files copied"; }
+        public double ProgressesAvg { get => Progresses.Count == 0 ? 0 : Progresses.Average(x => x.ProgressValue); }
         public CopyState GeneralState { get; set; }
         public System.Windows.Media.Brush ButtonBrush { get => GeneralState == CopyState.Working ? new SolidColorBrush(Colors.Green) : new SolidColorBrush(Colors.Blue); }
         public string BarContent { get => GeneralState == CopyState.Working ? "Pause" : "Resume"; }
@@ -49,7 +53,11 @@ namespace FilerWpf
         private void CopyDirectories()
         {
             // Create an array of progress indicators and reset events, one for each thread
-            numThreads = Math.Min(numThreads, Files.Count);
+            if (numThreads > Files.Count)
+            {
+                numThreads = Math.Min(numThreads, Files.Count);
+            }
+            else numThreads = Files.Count;
             AllThreads += numThreads;
             for (int i = 0; i < numThreads; i++)
             {
@@ -74,14 +82,15 @@ namespace FilerWpf
             {
                 string destinationSubDirectory = Path.Combine(To, Path.GetFileName(directory));
                 copyOperations.Add((directory, destinationSubDirectory));
+                TotalFileCount += Directory.GetFiles(directory, "*", SearchOption.AllDirectories).Length;
             }
-
+            
             // Use Parallel.For to copy each directory in parallel
             Parallel.For(0, copyOperations.Count, new ParallelOptions { MaxDegreeOfParallelism = numThreads }, i =>
             {
                 // Call CopyDirectory with the progress indicator and reset event for the current thread
                 CopyDirectory(copyOperations[i].source, copyOperations[i].destination, Progresses[AllThreads - numThreads + i].Progress, Progresses[AllThreads - numThreads + i].resetEvent, AllThreads - numThreads + i);
-                AllThreads--;
+               
             });
         }
         private void CopyDirectory(string sourceDirectory, string destinationDirectory, IProgress<double> progress, ManualResetEventSlim resetEvent, int idx)
@@ -113,7 +122,8 @@ namespace FilerWpf
 
                 // Increment the files copied counter using Interlocked
                 Interlocked.Increment(ref filesCopied);
-
+                CopiedFileCount++;
+                OnPropertyChanged(nameof(Progressstr));
                 // Calculate the progress for this thread and report it using the IProgress object
                 double threadProgress = (double)filesCopied / totalFiles * 100;
                 Progresses[idx].ProgressValue = threadProgress;
@@ -126,22 +136,36 @@ namespace FilerWpf
                 }
             }
             Progresses[idx].Status = "Finsihed";
-            if (Progresses.All(x => x.ProgressValue > 99 || x.State == CopyState.Canceled))
+            if (Progresses.All(x => x.ProgressValue > 99 || x.State == CopyState.Canceled || x.Status == "Finished"))
             {
                 Progresses.Clear();
+                AllThreads = 0;
+                MessageBox.Show("Success!");
+                TotalFileCount = 0;
+                CopiedFileCount = 0;
+                Files.Clear();
+                To = "";
+                OnPropertyChanged(nameof(Files));
+                OnPropertyChanged(nameof(To));
+                OnPropertyChanged(nameof(ProgressViews));
+                OnPropertyChanged(nameof(ProgressesAvg));
+                OnPropertyChanged(nameof(Progressstr));
             }
         }
         //Commands
         public ICommand GetFilesToCopy => new RelayCommand(x =>
         {
-            FolderBrowserDialog folderBrowserDialog = new FolderBrowserDialog();
-            folderBrowserDialog.Title = "Select Directories";
-            folderBrowserDialog.InitialFolder = @"C:\";
-            folderBrowserDialog.AllowMultiSelect = true;
+            FolderBrowserDialog folderBrowserDialog = new()
+            {
+                Title = "Select Directories",
+                InitialFolder = @"C:\",
+                AllowMultiSelect = true
+            };
             if (folderBrowserDialog.ShowDialog() == System.Windows.Forms.DialogResult.OK)
             {
                 Files = new(folderBrowserDialog.SelectedFolders);
                 OnPropertyChanged(nameof(Files));
+
             }
         });
         public ICommand GetDestination => new RelayCommand(x =>

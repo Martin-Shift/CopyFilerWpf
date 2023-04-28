@@ -87,7 +87,7 @@
 
         </ListBox>
         <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"  Grid.Row="0" Grid.Column="2" Grid.ColumnSpan="2">
-            <TextBox Text="Overall Progress" FontSize="20" FontFamily="Microsoft sans serif"></TextBox>
+            <TextBlock Text="{Binding Path=Progressstr, Mode=OneWay}" FontSize="20" FontFamily="Microsoft sans serif"></TextBlock>
             <WrapPanel>
                 <ProgressBar Value="{Binding Path=ProgressesAvg, Mode=OneWay}"  Height="50" Width="300">
                 </ProgressBar>
